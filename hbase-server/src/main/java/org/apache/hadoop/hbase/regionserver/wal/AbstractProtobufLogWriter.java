@@ -33,9 +33,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseInterfaceAudience;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import org.apache.hadoop.hbase.codec.Codec;
 import org.apache.hadoop.hbase.io.crypto.Cipher;
 import org.apache.hadoop.hbase.io.crypto.Encryption;
@@ -43,12 +41,18 @@ import org.apache.hadoop.hbase.io.crypto.Encryptor;
 import org.apache.hadoop.hbase.io.util.LRUDictionary;
 import org.apache.hadoop.hbase.security.EncryptionUtil;
 import org.apache.hadoop.hbase.security.User;
-import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.WALHeader;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.WALTrailer;
+
 import org.apache.hadoop.hbase.util.CommonFSUtils.StreamLacksCapabilityException;
 import org.apache.hadoop.hbase.util.EncryptionTest;
 import org.apache.hadoop.hbase.util.FSUtils;
+
+import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.WALHeader;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.WALTrailer;
 
 /**
  * Base class for Protobuf log writer.
@@ -154,8 +158,8 @@ public abstract class AbstractProtobufLogWriter {
     return doCompress;
   }
 
-  public void init(FileSystem fs, Path path, Configuration conf, boolean overwritable,
-      long blocksize) throws IOException, StreamLacksCapabilityException {
+  public void init(FileSystem fs, Path path, Path oldPath, Configuration conf,
+      boolean overwritable, long blocksize) throws IOException, StreamLacksCapabilityException {
     this.conf = conf;
     boolean doCompress = initializeCompressionContext(conf, path);
     this.trailerWarnSize = conf.getInt(WAL_TRAILER_WARN_SIZE, DEFAULT_WAL_TRAILER_WARN_SIZE);
@@ -163,7 +167,7 @@ public abstract class AbstractProtobufLogWriter {
     short replication = (short) conf.getInt("hbase.regionserver.hlog.replication",
       FSUtils.getDefaultReplication(fs, path));
 
-    initOutput(fs, path, overwritable, bufferSize, replication, blocksize);
+    initOutput(fs, path, oldPath, overwritable, bufferSize, replication, blocksize);
 
     boolean doTagCompress = doCompress
         && conf.getBoolean(CompressionContext.ENABLE_WAL_TAGS_COMPRESSION, true);
@@ -221,16 +225,14 @@ public abstract class AbstractProtobufLogWriter {
 
   protected void writeWALTrailer() {
     try {
-      int trailerSize = 0;
       if (this.trailer == null) {
         // use default trailer.
         LOG.warn("WALTrailer is null. Continuing with default.");
         this.trailer = buildWALTrailer(WALTrailer.newBuilder());
-        trailerSize = this.trailer.getSerializedSize();
-      } else if ((trailerSize = this.trailer.getSerializedSize()) > this.trailerWarnSize) {
+      } else if (trailer.getSerializedSize() > this.trailerWarnSize) {
         // continue writing after warning the user.
-        LOG.warn("Please investigate WALTrailer usage. Trailer size > maximum size : " + trailerSize
-            + " > " + this.trailerWarnSize);
+        LOG.warn("Please investigate WALTrailer usage. Trailer size > maximum size : "
+            + trailer.getSerializedSize() + " > " + this.trailerWarnSize);
       }
       length.set(writeWALTrailerAndMagic(trailer, ProtobufLogReader.PB_WAL_COMPLETE_MAGIC));
       this.trailerWritten = true;
@@ -239,8 +241,9 @@ public abstract class AbstractProtobufLogWriter {
     }
   }
 
-  protected abstract void initOutput(FileSystem fs, Path path, boolean overwritable, int bufferSize,
-      short replication, long blockSize) throws IOException, StreamLacksCapabilityException;
+  protected abstract void initOutput(FileSystem fs, Path path, Path oldPath,
+      boolean overwritable, int bufferSize, short replication, long blockSize)
+          throws IOException, StreamLacksCapabilityException;
 
   /**
    * return the file length after written.

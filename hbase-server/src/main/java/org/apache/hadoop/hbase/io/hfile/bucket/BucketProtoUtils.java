@@ -133,7 +133,7 @@ final class BucketProtoUtils {
       BlockCacheKey key = new BlockCacheKey(protoKey.getHfilename(), protoKey.getOffset(),
           protoKey.getPrimaryReplicaBlock(), fromPb(protoKey.getBlockType()));
       BucketCacheProtos.BucketEntry protoValue = entry.getValue();
-      BucketEntry value = new BucketEntry(
+      BucketEntry value = BucketEntry.newInstance(
           protoValue.getOffset(),
           protoValue.getLength(),
           protoValue.getAccessCounter(),

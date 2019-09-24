@@ -588,6 +588,7 @@ public class BucketCache implements BlockCache, HeapSize {
           if (backingMap.remove(cacheKey, be)) {
             blockEvicted(cacheKey, be, !existed);
             cacheStats.evicted(be.getCachedTime(), cacheKey.isPrimary());
+            be.recycle();
           }
           return null;
         });
@@ -1357,8 +1358,8 @@ public class BucketCache implements BlockCache, HeapSize {
       boolean succ = false;
       BucketEntry bucketEntry = null;
       try {
-        bucketEntry = new BucketEntry(offset, len, accessCounter, inMemory, RefCnt.create(recycler),
-            getByteBuffAllocator());
+        bucketEntry = BucketEntry.newInstance(offset, len, accessCounter, inMemory,
+            RefCnt.create(recycler), getByteBuffAllocator());
         bucketEntry.setDeserializerReference(data.getDeserializer());
         if (data instanceof HFileBlock) {
           // If an instance of HFileBlock, save on some allocations.

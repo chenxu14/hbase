@@ -22,6 +22,7 @@ import org.apache.hadoop.hbase.io.ByteBuffAllocator.Recycler;
 import org.apache.yetus.audience.InterfaceAudience;
 
 import org.apache.hbase.thirdparty.io.netty.util.AbstractReferenceCounted;
+import org.apache.hbase.thirdparty.io.netty.util.Recycler.Handle;
 import org.apache.hbase.thirdparty.io.netty.util.ReferenceCounted;
 
 /**
@@ -32,6 +33,19 @@ import org.apache.hbase.thirdparty.io.netty.util.ReferenceCounted;
 public class RefCnt extends AbstractReferenceCounted {
 
   private Recycler recycler = ByteBuffAllocator.NONE;
+  private final Handle<RefCnt> handle;
+
+  private static final org.apache.hbase.thirdparty.io.netty.util.Recycler<RefCnt> RECYCLER =
+      new org.apache.hbase.thirdparty.io.netty.util.Recycler<RefCnt>() {
+    @Override
+    protected RefCnt newObject(Handle<RefCnt> handle) {
+      return new RefCnt(handle);
+    }
+  };
+
+  private RefCnt(Handle<RefCnt> handle) {
+    this.handle = handle;
+  }
 
   /**
    * Create an {@link RefCnt} with an initial reference count = 1. If the reference count become
@@ -40,20 +54,20 @@ public class RefCnt extends AbstractReferenceCounted {
    * needed to track on heap ByteBuff.
    */
   public static RefCnt create() {
-    return new RefCnt(ByteBuffAllocator.NONE);
+    return create(ByteBuffAllocator.NONE);
   }
 
   public static RefCnt create(Recycler recycler) {
-    return new RefCnt(recycler);
-  }
-
-  public RefCnt(Recycler recycler) {
-    this.recycler = recycler;
+    RefCnt entry = RECYCLER.get();
+    entry.setRefCnt(1);
+    entry.recycler = recycler;
+    return entry;
   }
 
   @Override
   protected final void deallocate() {
     this.recycler.free();
+    handle.recycle(this);
   }
 
   @Override

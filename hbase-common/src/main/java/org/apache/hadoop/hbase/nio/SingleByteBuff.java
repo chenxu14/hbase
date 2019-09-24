@@ -55,7 +55,7 @@ public class SingleByteBuff extends ByteBuff {
   }
 
   public SingleByteBuff(Recycler recycler, ByteBuffer buf) {
-    this(new RefCnt(recycler), buf);
+    this(RefCnt.create(recycler), buf);
   }
 
   SingleByteBuff(RefCnt refCnt, ByteBuffer buf) {

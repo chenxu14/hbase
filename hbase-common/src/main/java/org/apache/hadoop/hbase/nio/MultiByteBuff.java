@@ -78,7 +78,7 @@ public class MultiByteBuff extends ByteBuff {
   }
 
   public MultiByteBuff(Recycler recycler, ByteBuffer... items) {
-    this(new RefCnt(recycler), items);
+    this(RefCnt.create(recycler), items);
   }
 
   MultiByteBuff(RefCnt refCnt, ByteBuffer... items) {

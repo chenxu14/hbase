@@ -37,6 +37,10 @@ import org.apache.hadoop.hbase.nio.RefCnt;
 import org.apache.hadoop.hbase.util.IdReadWriteLock;
 import org.apache.yetus.audience.InterfaceAudience;
 
+import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.hbase.thirdparty.io.netty.util.Recycler;
+import org.apache.hbase.thirdparty.io.netty.util.Recycler.Handle;
+
 /**
  * Item in cache. We expect this to be where most memory goes. Java uses 8 bytes just for object
  * headers; after this, we want to use as little as possible - so we only use 8 bytes, but in order
@@ -78,28 +82,64 @@ class BucketEntry implements HBaseReferenceCounted {
    * 4. The read RPC patch shipped the response, and release the block. then refCnt--; <br>
    * Once the refCnt decrease to zero, then the {@link BucketAllocator} will free the block area.
    */
-  private final RefCnt refCnt;
-  final AtomicBoolean markedAsEvicted;
-  final ByteBuffAllocator allocator;
+  private RefCnt refCnt;
+  AtomicBoolean markedAsEvicted;
+  ByteBuffAllocator allocator;
+  private final Handle<BucketEntry> handle;
 
   /**
    * Time this block was cached. Presumes we are created just before we are added to the cache.
    */
   private final long cachedTime = System.nanoTime();
 
-  BucketEntry(long offset, int length, long accessCounter, boolean inMemory) {
-    this(offset, length, accessCounter, inMemory, RefCnt.create(), ByteBuffAllocator.HEAP);
+  private static final Recycler<BucketEntry> RECYCLER = new Recycler<BucketEntry>() {
+    @Override
+    protected BucketEntry newObject(Handle<BucketEntry> handle) {
+      return new BucketEntry(handle);
+    }
+  };
+
+  public void recycle() {
+    if (handle != null) {
+      handle.recycle(this);
+    }
   }
 
-  BucketEntry(long offset, int length, long accessCounter, boolean inMemory, RefCnt refCnt,
-      ByteBuffAllocator allocator) {
-    setOffset(offset);
+  public static BucketEntry newInstance(long offset, int length, long accessCounter,
+      boolean inMemory) {
+    return newInstance(offset, length, accessCounter, inMemory, RefCnt.create(),
+        ByteBuffAllocator.HEAP);
+  }
+
+  public static BucketEntry newInstance(long offset, int length, long accessCounter,
+      boolean inMemory, RefCnt refCnt, ByteBuffAllocator allocator) {
+    BucketEntry entry = RECYCLER.get();
+    entry.setOffset(offset);
+    entry.length = length;
+    entry.accessCounter = accessCounter;
+    entry.priority = inMemory ? BlockPriority.MEMORY : BlockPriority.MULTI;
+    entry.refCnt = refCnt;
+    entry.markedAsEvicted.set(false);
+    entry.allocator = allocator;
+    entry.deserializerIndex = 0;
+    return entry;
+  }
+
+  private BucketEntry(Handle<BucketEntry> handle) {
+    this.handle = handle;
+    this.markedAsEvicted = new AtomicBoolean(false);
+  }
+
+  @VisibleForTesting
+  public BucketEntry(long offset, int length, long accessCounter, boolean inMemory) {
+    this.handle = null;
+    this.setOffset(offset);
     this.length = length;
     this.accessCounter = accessCounter;
     this.priority = inMemory ? BlockPriority.MEMORY : BlockPriority.MULTI;
-    this.refCnt = refCnt;
+    this.refCnt = RefCnt.create();
     this.markedAsEvicted = new AtomicBoolean(false);
-    this.allocator = allocator;
+    this.allocator = ByteBuffAllocator.HEAP;
   }
 
   long offset() {

@@ -23,6 +23,8 @@ import org.apache.hbase.thirdparty.io.netty.channel.ChannelOutboundHandlerAdapte
 import org.apache.hbase.thirdparty.io.netty.channel.ChannelPromise;
 
 import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Encoder for {@link RpcResponse}.
@@ -30,7 +32,7 @@ import org.apache.yetus.audience.InterfaceAudience;
  */
 @InterfaceAudience.Private
 class NettyRpcServerResponseEncoder extends ChannelOutboundHandlerAdapter {
-
+  public static final Logger LOG = LoggerFactory.getLogger(NettyRpcServerResponseEncoder.class);
   private final MetricsHBaseServer metrics;
 
   NettyRpcServerResponseEncoder(MetricsHBaseServer metrics) {
@@ -44,7 +46,6 @@ class NettyRpcServerResponseEncoder extends ChannelOutboundHandlerAdapter {
       RpcResponse resp = (RpcResponse) msg;
       BufferChain buf = resp.getResponse();
       ctx.write(Unpooled.wrappedBuffer(buf.getBuffers()), promise).addListener(f -> {
-        resp.done();
         if (f.isSuccess()) {
           metrics.sentBytes(buf.size());
         }

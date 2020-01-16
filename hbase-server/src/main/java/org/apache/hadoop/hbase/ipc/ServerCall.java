@@ -133,18 +133,20 @@ public abstract class ServerCall<T extends ServerRpcConnection> implements RpcCa
    * Call is done. Execution happened and we returned results to client. It is
    * now safe to cleanup.
    */
-  @edu.umd.cs.findbugs.annotations.SuppressWarnings(value = "IS2_INCONSISTENT_SYNC",
-      justification = "Presume the lock on processing request held by caller is protection enough")
   @Override
   public void done() {
+    releaseResource();
+  }
+
+  @Override
+  @edu.umd.cs.findbugs.annotations.SuppressWarnings(value = "IS2_INCONSISTENT_SYNC",
+    justification = "Presume the lock on processing request held by caller is protection enough")
+  public void releaseResource() {
     if (this.cellBlockStream != null) {
-      // This will return back the BBs which we got from pool.
+      // This will return back the BBs which we got from pool
       this.cellBlockStream.releaseResources();
       this.cellBlockStream = null;
     }
-    // If the call was run successfuly, we might have already returned the BB
-    // back to pool. No worries..Then inputCellBlock will be null
-    cleanup();
   }
 
   private void release(int mask) {
@@ -217,7 +219,7 @@ public abstract class ServerCall<T extends ServerRpcConnection> implements RpcCa
   }
 
   @Override
-  public synchronized void setResponse(Message m, final CellScanner cells,
+  public void setResponse(Message m, final CellScanner cells,
       Throwable t, String errorMsg) {
     if (this.isError) return;
     if (t != null) this.isError = true;
@@ -484,7 +486,7 @@ public abstract class ServerCall<T extends ServerRpcConnection> implements RpcCa
   }
 
   @Override
-  public synchronized void setCallBack(RpcCallback callback) {
+  public void setCallBack(RpcCallback callback) {
     this.rpcCallback = callback;
   }
 
@@ -539,7 +541,7 @@ public abstract class ServerCall<T extends ServerRpcConnection> implements RpcCa
   }
 
   @Override
-  public synchronized BufferChain getResponse() {
+  public BufferChain getResponse() {
     return response;
   }
 }
